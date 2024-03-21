@@ -1,10 +1,10 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # Main code for host side printer firmware
 #
 # Copyright (C) 2016-2024  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import sys, os, gc, optparse, logging, time, collections, importlib
+import sys, os, gc, argparse, logging, time, collections, importlib
 import util, reactor, queuelogger, msgproto
 import gcode, configfile, pins, mcu, toolhead, webhooks
 
@@ -250,62 +250,75 @@ def import_test():
             importlib.import_module(mname + '.' + module_name)
     sys.exit(0)
 
-def arg_dictionary(option, opt_str, value, parser):
-    key, fname = "dictionary", value
+def arg_dictionary(value: str) -> dict:
+    key = 'dictionary'
     if '=' in value:
-        mcu_name, fname = value.split('=', 1)
-        key = "dictionary_" + mcu_name
-    if parser.values.dictionary is None:
-        parser.values.dictionary = {}
-    parser.values.dictionary[key] = fname
+        mcu_name, value = value.split('=', 1)
+        key = f'{key}_{mcu_name}'
+
+    return {key: value}
 
 def main():
-    usage = "%prog [options] <config file>"
-    opts = optparse.OptionParser(usage)
-    opts.add_option("-i", "--debuginput", dest="debuginput",
-                    help="read commands from file instead of from tty port")
-    opts.add_option("-I", "--input-tty", dest="inputtty",
-                    default='/tmp/printer',
-                    help="input tty name (default is /tmp/printer)")
-    opts.add_option("-a", "--api-server", dest="apiserver",
-                    help="api server unix domain socket filename")
-    opts.add_option("-l", "--logfile", dest="logfile",
-                    help="write log to file instead of stderr")
-    opts.add_option("-v", action="store_true", dest="verbose",
-                    help="enable debug messages")
-    opts.add_option("-o", "--debugoutput", dest="debugoutput",
-                    help="write output to file instead of to serial port")
-    opts.add_option("-d", "--dictionary", dest="dictionary", type="string",
-                    action="callback", callback=arg_dictionary,
-                    help="file to read for mcu protocol dictionary")
-    opts.add_option("--import-test", action="store_true",
-                    help="perform an import module test")
-    options, args = opts.parse_args()
-    if options.import_test:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-i',
+        '--debuginput',
+        help='read commands from file instead of from tty port')
+    parser.add_argument('-I',
+                        '--input-tty',
+                        dest='inputtty',
+                        default='/tmp/printer',
+                        help='input tty name (default is /tmp/printer)')
+    parser.add_argument('-a',
+                        '--api-server',
+                        dest='apiserver',
+                        help='api server unix domain socket filename')
+    parser.add_argument('-l',
+                        '--logfile',
+                        dest='logfile',
+                        help='write log to file instead of stderr')
+    parser.add_argument(
+        '-p',
+        '--log-level',
+        choices=['critical', 'error', 'warning', 'info', 'debug'],
+        help='log level',
+        default='warning')
+    parser.add_argument('-o',
+                        '--debugoutput',
+                        help='write output to file instead of to serial port')
+    parser.add_argument('-d',
+                        '--dictionary',
+                        type=arg_dictionary,
+                        default={},
+                        help='file to read for mcu protocol dictionary')
+    parser.add_argument('--import-test',
+                        action='store_true',
+                        help='perform an import module test')
+    parser.add_argument('config_file')
+    args = parser.parse_args()
+
+    if args.import_test:
         import_test()
-    if len(args) != 1:
-        opts.error("Incorrect number of arguments")
-    start_args = {'config_file': args[0], 'apiserver': options.apiserver,
+
+    start_args = {'config_file': args.config_file, 'apiserver': args.apiserver,
                   'start_reason': 'startup'}
 
-    debuglevel = logging.INFO
-    if options.verbose:
-        debuglevel = logging.DEBUG
-    if options.debuginput:
-        start_args['debuginput'] = options.debuginput
-        debuginput = open(options.debuginput, 'rb')
+    log_level = getattr(logging, args.log_level.upper())
+    if args.debuginput:
+        start_args['debuginput'] = args.debuginput
+        debuginput = open(args.debuginput, 'rb')
         start_args['gcode_fd'] = debuginput.fileno()
     else:
-        start_args['gcode_fd'] = util.create_pty(options.inputtty)
-    if options.debugoutput:
-        start_args['debugoutput'] = options.debugoutput
-        start_args.update(options.dictionary)
+        start_args['gcode_fd'] = util.create_pty(args.inputtty)
+    if args.debugoutput:
+        start_args['debugoutput'] = args.debugoutput
+        start_args.update(args.dictionary)
     bglogger = None
-    if options.logfile:
-        start_args['log_file'] = options.logfile
-        bglogger = queuelogger.setup_bg_logging(options.logfile, debuglevel)
+    if args.logfile:
+        start_args['log_file'] = args.logfile
+        bglogger = queuelogger.setup_bg_logging(args.logfile, log_level)
     else:
-        logging.getLogger().setLevel(debuglevel)
+        logging.getLogger().setLevel(log_level)
     logging.info("Starting Klippy...")
     git_info = util.get_git_version()
     git_vers = git_info["version"]
@@ -343,7 +356,7 @@ def main():
             "Linux: %s" % (start_args['linux_version']),
             "Python: %s" % (repr(sys.version),)])
         logging.info(versions)
-    elif not options.debugoutput:
+    elif not args.debugoutput:
         logging.warning("No log file specified!"
                         " Severe timing issues may result!")
     gc.disable()
