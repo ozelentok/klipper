@@ -3,7 +3,7 @@
 # Copyright (C) 2020-2023  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging, time, collections, multiprocessing, os
+import csv, logging, time, collections, multiprocessing, os
 from . import bus, bulk_sensor
 
 # ADXL345 registers
@@ -39,11 +39,13 @@ class AccelQueryHelper:
         self.request_start_time = self.request_end_time = print_time
         self.msgs = []
         self.samples = []
+
     def finish_measurements(self):
         toolhead = self.printer.lookup_object('toolhead')
         self.request_end_time = toolhead.get_last_move_time()
         toolhead.wait_moves()
         self.is_finished = True
+
     def handle_batch(self, msg):
         if self.is_finished:
             return False
@@ -52,6 +54,7 @@ class AccelQueryHelper:
             return False
         self.msgs.append(msg)
         return True
+
     def has_valid_samples(self):
         for msg in self.msgs:
             data = msg['data']
@@ -69,6 +72,7 @@ class AccelQueryHelper:
             # is at least 1 second, so this possibility is negligible.
             return True
         return False
+
     def get_samples(self):
         if not self.msgs:
             return self.samples
@@ -85,23 +89,24 @@ class AccelQueryHelper:
                 count += 1
         del samples[count:]
         return self.samples
+
     def write_to_file(self, filename):
-        def write_impl():
+        def write_impl() -> None:
             try:
                 # Try to re-nice writing process
                 os.nice(20)
             except:
                 pass
-            f = open(filename, "w")
-            f.write("#time,accel_x,accel_y,accel_z\n")
-            samples = self.samples or self.get_samples()
-            for t, accel_x, accel_y, accel_z in samples:
-                f.write("%.6f,%.6f,%.6f,%.6f\n" % (
-                    t, accel_x, accel_y, accel_z))
-            f.close()
-        write_proc = multiprocessing.Process(target=write_impl)
-        write_proc.daemon = True
+            with open(filename, 'w') as f:
+                writer = csv.writer(f, delimiter=',')
+                writer.writerow(['#time', 'accel_x', 'accel_y', 'accel_z'])
+                samples = self.samples or self.get_samples()
+                writer.writerows(samples)
+
+        write_proc = multiprocessing.Process(target=write_impl, daemon=True)
         write_proc.start()
+        write_proc.join(timeout=600)
+
 
 # Helper class for G-Code commands
 class AccelCommandHelper:
