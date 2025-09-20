@@ -12,7 +12,9 @@ import cffi
 ######################################################################
 
 GCC_CMD = "gcc"
-COMPILE_ARGS = ("-Wall -g -O2 -shared -fPIC"
+COMPILE_ARGS = ("-Wall -g -march=native -mtune=native -O2 -shared -fPIC -pipe -fno-stack-protector -fno-plt -fexceptions"
+                " -Wp,-D_FORTIFY_SOURCE=0 -Wformat -Werror=format-security"
+                " -fno-stack-clash-protection -fcf-protection=none"
                 " -flto -fwhole-program -fno-use-linker-plugin"
                 " -o %s %s")
 SSE_FLAGS = "-mfpmath=sse -msse2"
