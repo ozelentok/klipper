@@ -13,6 +13,11 @@ import cffi
 
 GCC_CMD = "gcc"
 COMPILE_ARGS = ("-Wall -g -O2 -shared -fPIC"
+                " -march=native -mtune=native"
+                " -fomit-frame-pointer -momit-leaf-frame-pointer"
+                " -fno-stack-protector -fno-stack-clash-protection"
+                " -fcf-protection=none"
+                " -Wp,-D_FORTIFY_SOURCE=0"
                 " -flto -fwhole-program -fno-use-linker-plugin"
                 " -o %s %s")
 SSE_FLAGS = "-mfpmath=sse -msse2"
