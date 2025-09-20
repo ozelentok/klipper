@@ -990,7 +990,7 @@ sensor_pin:
 #   be smoothed to reduce the impact of measurement noise. The default
 #   is 1 seconds.
 control:
-#   Control algorithm (either pid or watermark). This parameter must
+#   Control algorithm (either pid, watermark or mpc). This parameter must
 #   be provided.
 pid_Kp:
 pid_Ki:
@@ -1009,6 +1009,15 @@ pid_Kd:
 #   Celsius above the target temperature before disabling the heater
 #   as well as the number of degrees below the target before
 #   re-enabling the heater. The default is 2 degrees Celsius.
+#
+#   If control: mpc
+#   See MPC.md for details about these parameters.
+#heater_power:
+#cooling_fan:
+#filament_diameter: 1.75
+#filament_density: 1.2
+#filament_heat_capacity: 1.8
+#
 #pwm_cycle_time: 0.100
 #   Time in seconds for each software PWM cycle of the heater. It is
 #   not recommended to set this unless there is an electrical

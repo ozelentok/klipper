@@ -7,6 +7,8 @@ import logging
 import os
 import threading
 
+from .control_mpc import ControlMPC
+
 ######################################################################
 # Heater
 ######################################################################
@@ -48,7 +50,7 @@ class Heater:
         self.next_pwm_time = 0.0
         self.last_pwm_value = 0.0
         # Setup control algorithm sub-class
-        algos = {"watermark": ControlBangBang, "pid": ControlPID}
+        algos = {"watermark": ControlBangBang, "pid": ControlPID, "mpc": ControlMPC}
         algo = config.getchoice("control", algos)
         self.control = algo(self, config)
         # Setup output heater pin
@@ -124,6 +126,8 @@ class Heater:
                 % (degrees, self.min_temp, self.max_temp)
             )
         with self.lock:
+            if degrees != 0.0 and hasattr(self.control, "check_valid"):
+                self.control.check_valid()
             self.target_temp = degrees
 
     def get_temp(self, eventtime):
@@ -173,11 +177,17 @@ class Heater:
             target_temp = self.target_temp
             smoothed_temp = self.smoothed_temp
             last_pwm_value = self.last_pwm_value
-        return {
+            control_stats = None
+            if hasattr(self.control, "get_status"):
+                control_stats = self.control.get_status(eventtime)
+        status = {
             "temperature": round(smoothed_temp, 2),
             "target": target_temp,
             "power": last_pwm_value,
         }
+        if control_stats:
+            status["control_stats"] = control_stats
+        return status
 
     cmd_SET_HEATER_TEMPERATURE_help = "Sets a heater temperature"
 
@@ -338,6 +348,8 @@ class PrinterHeaters:
         return self.available_heaters
 
     def lookup_heater(self, heater_name):
+        if " " in heater_name:
+            heater_name = heater_name.split(" ", 1)[1]
         if heater_name not in self.heaters:
             raise self.printer.config_error("Unknown heater '%s'" % (heater_name,))
         return self.heaters[heater_name]

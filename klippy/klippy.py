@@ -230,6 +230,15 @@ class Printer:
             self.run_result = result
         self.reactor.end()
 
+    def wait_while(self, condition_cb, error_on_cancel=True, interval=1.0):
+        eventtime = self.reactor.monotonic()
+        while condition_cb(eventtime):
+            if self.is_shutdown():
+                if error_on_cancel:
+                    raise gcode.CommandError("Command interrupted")
+                return
+            eventtime = self.reactor.pause(eventtime + interval)
+
 
 ######################################################################
 # Startup
